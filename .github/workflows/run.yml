@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "run, daily, weekly, status, resume"
+        description: "run, daily, weekly, status, resume, preview [clip id]"
         default: run
 
 concurrency:
@@ -69,6 +69,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SCHEDULE: ${{ github.event.schedule }}
           INPUT_COMMAND: ${{ inputs.command }}
+          GTA6_REPO_TOKEN: ${{ secrets.GTA6_REPO_TOKEN }}
         run: |
           cd app
           CMD=run
@@ -77,8 +78,9 @@ jobs:
             "0 20 * * 0") CMD=weekly ;;
           esac
           [ -n "$INPUT_COMMAND" ] && CMD="$INPUT_COMMAND"
-          case "$CMD" in run|daily|weekly|status|resume) ;; *) echo "unknown command"; exit 1 ;; esac
-          python -m gta6shorts "$CMD"
+          set -- $CMD
+          case "$1" in run|daily|weekly|status|resume|preview) ;; *) echo "unknown command"; exit 1 ;; esac
+          python -m gta6shorts "$@"
 
       - name: Save state
         if: always()
