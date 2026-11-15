@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "run, daily, weekly, status, resume, telegram-test, preview [clip id]"
+        description: "run, daily, weekly, status, resume, unpause <Creator>, telegram-test, preview [clip id]"
         default: run
 
 # Read-only commands get their own group so they don't wait behind a long run
@@ -79,7 +79,7 @@ jobs:
           CMD=run
           [ -n "$INPUT_COMMAND" ] && CMD="$INPUT_COMMAND"
           set -- $CMD
-          case "$1" in run|daily|weekly|status|resume|telegram-test|preview) ;; *) echo "unknown command"; exit 1 ;; esac
+          case "$1" in run|daily|weekly|status|resume|unpause|telegram-test|preview) ;; *) echo "unknown command"; exit 1 ;; esac
           if [ "$1" != run ]; then
             python -m gta6shorts "$@"
             exit $?
