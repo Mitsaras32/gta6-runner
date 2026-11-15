@@ -4,19 +4,23 @@
 # (LOG_LEVEL=CRITICAL) and all details go to Telegram.
 name: run
 
+# GitHub often starts scheduled runs late or skips them, so a run that starts
+# near an upload slot keeps looping (a cycle every 10 minutes) until the day's
+# slots are done or ~5 hours pass. Any one schedule that fires covers the rest.
+# Daily and weekly reports are sent from inside the cycle.
 on:
   schedule:
-    - cron: "*/15 * * * *"   # pipeline cycle
-    - cron: "0 21 * * *"     # daily report, 23:00 Athens (winter time)
-    - cron: "0 20 * * 0"     # weekly review, Sunday 22:00 Athens
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
     inputs:
       command:
-        description: "run, daily, weekly, status, resume, preview [clip id]"
+        description: "run, daily, weekly, status, resume, telegram-test, preview [clip id]"
         default: run
 
+# Read-only commands get their own group so they don't wait behind a long run
+# and never write the saved state.
 concurrency:
-  group: gta6-shorts
+  group: ${{ (inputs.command == 'status' || startsWith(inputs.command, 'preview')) && 'gta6-readonly' || 'gta6-shorts' }}
   cancel-in-progress: false
 
 permissions:
@@ -25,7 +29,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 355
     steps:
       - name: Get the private code
         uses: actions/checkout@v4
@@ -73,28 +77,37 @@ jobs:
         run: |
           cd app
           CMD=run
-          case "$SCHEDULE" in
-            "0 21 * * *") CMD=daily ;;
-            "0 20 * * 0") CMD=weekly ;;
-          esac
           [ -n "$INPUT_COMMAND" ] && CMD="$INPUT_COMMAND"
           set -- $CMD
-          case "$1" in run|daily|weekly|status|resume|preview) ;; *) echo "unknown command"; exit 1 ;; esac
-          python -m gta6shorts "$@"
+          case "$1" in run|daily|weekly|status|resume|telegram-test|preview) ;; *) echo "unknown command"; exit 1 ;; esac
+          if [ "$1" != run ]; then
+            python -m gta6shorts "$@"
+            exit $?
+          fi
+          end=$((SECONDS + 300 * 60))
+          while :; do
+            python -m gta6shorts run || true
+            bash scripts/state.sh save > /dev/null 2>&1 || echo "state save failed"
+            [ $SECONDS -ge $end ] && break
+            python -m gta6shorts keep-running || break
+            echo "slot open or coming up, next cycle in 10 minutes"
+            sleep 600
+          done
 
       - name: Save state
-        if: always()
+        if: always() && inputs.command != 'status' && !startsWith(inputs.command, 'preview')
         env:
           GTA6_REPO_TOKEN: ${{ secrets.GTA6_REPO_TOKEN }}
         run: bash app/scripts/state.sh save > /dev/null 2>&1
 
       # GitHub switches off schedules in public repos after 60 days without commits.
+      # Writes the week number, so it commits at most once a week.
       - name: Keep the schedule alive
-        if: github.event.schedule == '0 20 * * 0'
+        if: github.event_name == 'schedule'
         run: |
           git clone -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" keep > /dev/null 2>&1
           cd keep
-          date -u +%F > .keepalive
+          date -u +%G-W%V > .keepalive
           git add .keepalive
           git -c user.name="gta6-bot" -c user.email="gta6-bot@users.noreply.github.com" commit -q -m "keep alive" || exit 0
           git push -q > /dev/null 2>&1
