@@ -25,6 +25,7 @@ concurrency:
 
 permissions:
   contents: write   # only for the weekly keep-alive commit in this runner repo
+  actions: write    # lets a run that hits its time limit start the next run itself
 
 jobs:
   run:
@@ -60,6 +61,7 @@ jobs:
           key: whisper-small-v1
 
       - name: Run
+        id: run
         env:
           LOG_LEVEL: CRITICAL
           PYTHONPATH: src
@@ -88,8 +90,14 @@ jobs:
           while :; do
             python -m gta6shorts run || true
             bash scripts/state.sh save > /dev/null 2>&1 || echo "state save failed"
-            [ $SECONDS -ge $end ] && break
             python -m gta6shorts keep-running || break
+            if [ $SECONDS -ge $end ]; then
+              # Out of time but a slot is still open or coming up: start the next run
+              # now instead of waiting for GitHub's schedule, which can skip hours.
+              echo "handing over to a new run"
+              echo "relay=1" >> "$GITHUB_OUTPUT"
+              break
+            fi
             echo "slot open or coming up, next cycle in 10 minutes"
             sleep 600
           done
@@ -99,6 +107,13 @@ jobs:
         env:
           GTA6_REPO_TOKEN: ${{ secrets.GTA6_REPO_TOKEN }}
         run: bash app/scripts/state.sh save > /dev/null 2>&1
+
+      # Runs after Save state, so the new run (queued behind this one) loads fresh state.
+      - name: Start the next run
+        if: steps.run.outputs.relay == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run run.yml -R "${{ github.repository }}" -f command=run > /dev/null 2>&1 || echo "could not start the next run"
 
       # GitHub switches off schedules in public repos after 60 days without commits.
       # Writes the week number, so it commits at most once a week.
