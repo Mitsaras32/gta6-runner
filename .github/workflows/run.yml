@@ -55,8 +55,15 @@ jobs:
       - name: Install ffmpeg and packages
         run: |
           sudo apt-get update -qq > /dev/null 2>&1
-          sudo apt-get install -y -qq ffmpeg tesseract-ocr > /dev/null 2>sudo apt-get install -y -qq ffmpeg > /dev/null 2>&11
+          sudo apt-get install -y -qq ffmpeg tesseract-ocr > /dev/null 2>&1
           pip install -q -r app/requirements.txt > /dev/null 2>&1
+          # YouTube changes often; the newest yt-dlp is the one that still works.
+          pip install -q -U "yt-dlp[default]" > /dev/null 2>&1
+
+      # yt-dlp needs a JavaScript runtime to read YouTube (for IShowSpeed's streams).
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
       - name: Cache the speech model
         uses: actions/cache@v4
@@ -72,6 +79,8 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # cookies.txt from a spare YouTube account; without it YouTube blocks GitHub's servers.
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
