@@ -55,7 +55,7 @@ jobs:
       - name: Install ffmpeg and packages
         run: |
           sudo apt-get update -qq > /dev/null 2>&1
-          sudo apt-get install -y -qq ffmpeg > /dev/null 2>&1
+          sudo apt-get install -y -qq ffmpeg tesseract-ocr > /dev/null 2>sudo apt-get install -y -qq ffmpeg > /dev/null 2>&11
           pip install -q -r app/requirements.txt > /dev/null 2>&1
 
       - name: Cache the speech model
