@@ -14,8 +14,11 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "run, daily, weekly, status, resume, unpause <Creator>, telegram-test, preview [clip id]"
+        description: "run, post-now [Creator], daily, weekly, status, resume, unpause <Creator>, telegram-test, preview [clip id]"
         default: run
+      app_ref:
+        description: "Branch of the private code to run (empty = main)"
+        default: ""
 
 # Read-only commands get their own group so they don't wait behind a long run
 # and never write the saved state.
@@ -37,6 +40,7 @@ jobs:
         with:
           repository: Mitsaras32/gta6-shorts
           token: ${{ secrets.GTA6_REPO_TOKEN }}
+          ref: ${{ inputs.app_ref }}
           path: app
 
       - name: Load saved state
@@ -81,7 +85,7 @@ jobs:
           CMD=run
           [ -n "$INPUT_COMMAND" ] && CMD="$INPUT_COMMAND"
           set -- $CMD
-          case "$1" in run|daily|weekly|status|resume|unpause|telegram-test|preview) ;; *) echo "unknown command"; exit 1 ;; esac
+          case "$1" in run|post-now|daily|weekly|status|resume|unpause|telegram-test|preview) ;; *) echo "unknown command"; exit 1 ;; esac
           if [ "$1" != run ]; then
             python -m gta6shorts "$@"
             exit $?
